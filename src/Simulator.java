@@ -3,117 +3,113 @@
  * Created by ming on 2017-01-12.
  */
 public class Simulator {
-    int ticks;
-    int lambda;
-    int packetLength;
-    int serviceTime;
-    One_Queue queue;
+    int ticks = 100000000; //1000 secs
+    int W = 1000000;
+    int N;
+    int A;
+    int[] busyUntil;
+    int[] busyStart;
+    int processingTick;
+    One_Queue[] queues;
+    boolean[] collision;
+    int transmitting;
+    int packetsThrough;
 
-    int nextPacGen = -1;
-    int totalPacGen = -1;
-    int nextPacPro = -1;
-    int packetGenerated = 0;
-    int souj = 0;
-    double rho = 0;
-
-    int serverIdle = 0;
-    int runTimes = 9;
-    int packetDropped = 0;
-    int totalGenerated = 0;
-    int totalProcessed = 0;
-    double percentageDrop = 0;
-
-    double[] avgPac;
-    double[] avgSouj;
-    double avgavgpac;
-    double avgavgsouj;
-    public Simulator(String args) {
-        args = args.replaceAll("\\s", "");
-        String[] split = args.split(",");
-        setup(Integer.parseInt(split[0]), Integer.parseInt(split[1]), Integer.parseInt(split[2]), Integer.parseInt(split[3]));
-        if (split.length == 5) {
-            queue = new One_Queue(split[4]);
-        } else {
-            queue = new One_Queue();
+    public Simulator(int A, int N) {
+        this.N = N;
+        this. A = A;
+        busyUntil = new int[N];
+        busyStart = new int[N];
+        queues = new One_Queue[N];
+        collision = new boolean[N];
+        for (int i = 0; i < N; i++) {
+            collision[i] = false;
+            busyStart[i] = Integer.MAX_VALUE;
+            busyUntil[i] = Integer.MIN_VALUE;
+            queues[i] = new One_Queue();
         }
-    }
-    public void setup(int ticks, int lambda, int L, int C) {
-        this.ticks = ticks;
-        this.lambda = lambda;
-        this.packetLength = L;
-        this.serviceTime = C;
-        rho = (double)lambda * (double)packetLength / (double)serviceTime;
-        avgPac = new double[runTimes];
-        avgSouj = new double[runTimes];
+        processingTick = (int) ((double)8000 / (double) W * 100000);
+        transmitting = 0;
+        packetsThrough = 0;
     }
 
     public void simulate() {
-        for (int j = 0; j < runTimes; j++) {
-            queue.queue.clear();
-            queue.server.finishProcess();
-
-            nextPacGen = queue.randomGen(lambda);
-            totalPacGen = nextPacGen;
-
-            packetGenerated = 0;
-            totalProcessed = 0;
-            souj = 0;
-            nextPacPro = -1;
-            for (int i = 0; i < ticks; i++) {
-                if (i == totalPacGen) {
-                    boolean b = queue.generatePacket(i, packetLength);
-                    if (!b) {
-                        packetDropped++;
-                    }
-
-                    totalGenerated++;
-                    do{
-                        nextPacGen = queue.randomGen(lambda);
-                    } while (nextPacGen == 0);
-                    totalPacGen = nextPacGen + i;
-                }
-
-                if (!queue.queue.isEmpty() && queue.server.isBusy() != 1) {
-                    queue.processPacket();
-                    nextPacPro = i + Math.round(Math.round(Math.ceil((float) (packetLength) / (float) (serviceTime))));
-                } else if (queue.queue.isEmpty()) {
-                    serverIdle++;
-                }
-
-                if (i == nextPacPro) {
-                    Packet p = queue.queue.poll();
-                    p.process(i);
-                    souj += p.timeInQ;
-                    queue.finishPacket();
-                    totalProcessed++;
-                }
-                packetGenerated += queue.queue.size();
-            }
-
-            if (!queue.queue.isEmpty()) {
-                for (Packet p : queue.queue) {
-                    souj += ticks - 1 - p.generated;
-                }
-            }
-            avgPac[j] = (double)packetGenerated / (double)ticks;
-            avgSouj[j] = (double)souj / (double)totalProcessed;
+        for (One_Queue q: queues) {
+            int i = q.randomGen(A);
+            q.packetTick = i;
         }
-            serverIdle /= runTimes;
-            percentageDrop = (double) packetDropped / (double) totalGenerated * 100;
-            for (int i = 0; i < runTimes; i++) {
-                avgavgpac += avgPac[i];
-                avgavgsouj += avgSouj[i];
+        for (int i = 0; i < ticks; i++) {
+            for (int j = 0; j < N; j++) {
+                if (queues[j].isTransmitting()) {
+                    transmitting++;
+                }
             }
-            avgavgpac /= runTimes;
-            avgavgsouj /= runTimes;
+            if (transmitting > 1) {
+                for (int j = 0; j < N; j++) {
+                    if (queues[j].isTransmitting()) {
+                        collision[j] = true;
+                    }
+                }
+            }
+            for (int j = 0; j < N; j++) {
+                if (i == queues[j].packetTick) {
+                    queues[j].generatePacket(i);
+                    queues[j].packetTick = queues[j].randomGen(A) + i;
+                }
+
+                if (i > busyUntil[j]) {
+                    busyStart[j] = Integer.MAX_VALUE;
+                    busyUntil[j] = Integer.MIN_VALUE;
+                }
+
+                if (queues[j].queue.isEmpty()) {
+                    continue;
+                }
+
+                if (collision[j]) {
+                    queues[j].backOff(i);
+                }
+
+                if (queues[j].isTransmitting()) {
+                    if (i >= queues[j].transmittingUntil) {
+                        queues[j].transmitFinish();
+                        packetsThrough++;
+                    }
+                }
+
+                if (queues[j].backingOff) {
+                    if (queues[j].backOffTick <= i) {
+                        queues[j].stopBackOff();
+                    }
+                }
+
+                if (queues[j].transmitReady() && !queues[j].sensed) {
+                    for (int k = 0; k < N; k++) {
+                        if (j != k) {
+                            if (i > busyStart[k] && i < busyUntil[k]) {
+                                queues[j].waitTick(i + 1);
+                                break;
+                            }
+                        }
+                    }
+                    if (!queues[j].backingOff) {
+                        queues[j].sensed = true;
+                    }
+                } else if (queues[j].sensed && queues[j].transmitReady()) {
+                    queues[j].transmit(i + processingTick);
+                    busyStart[j] = i + 3;
+                    busyUntil[j] = i + processingTick + 3;
+                }
+            }
+            for (int j = 0; j < N; j++) {
+                collision[j] = false;
+            }
+            transmitting = 0;
+        }
+        System.out.println(packetsThrough);
     }
 
     public String print() {
-        String str = "";
-        str += String.format("%1$.7f \n", avgavgpac);
-        str += String.format("%1$.7f \n", avgavgsouj);
-        str += String.format("%d \n", serverIdle);
-        str += String.format("%1$.5f\n", percentageDrop);
-        return str;
+        return "";
     }
 }
