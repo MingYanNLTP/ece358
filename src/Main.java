@@ -3,7 +3,10 @@
  */
 public class Main {
     public static void main(String args[]) {
-        Simulator simulator = new Simulator(16, 16);
-        simulator.simulate();
+        for (int i = 4; i < 18; i+=2) {
+            Simulator simulator = new Simulator(i, 8);
+            simulator.simulate();
+        }
+
     }
 }

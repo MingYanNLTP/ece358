@@ -3,7 +3,7 @@
  * Created by ming on 2017-01-12.
  */
 public class Simulator {
-    int ticks = 100000000; //1000 secs
+    int ticks = 100000; //1 secs
     int W = 1000000;
     int N;
     int A;
@@ -14,6 +14,8 @@ public class Simulator {
     boolean[] collision;
     int transmitting;
     int packetsThrough;
+    double soujournDelay;
+    int dropped;
 
     public Simulator(int A, int N) {
         this.N = N;
@@ -31,6 +33,8 @@ public class Simulator {
         processingTick = (int) ((double)8000 / (double) W * 100000);
         transmitting = 0;
         packetsThrough = 0;
+        soujournDelay = 0;
+        dropped = 0;
     }
 
     public void simulate() {
@@ -67,12 +71,12 @@ public class Simulator {
                 }
 
                 if (collision[j]) {
-                    queues[j].backOff(i);
+                    dropped += queues[j].backOff(i);
                 }
 
                 if (queues[j].isTransmitting()) {
                     if (i >= queues[j].transmittingUntil) {
-                        queues[j].transmitFinish();
+                        soujournDelay += queues[j].transmitFinish(i);
                         packetsThrough++;
                     }
                 }
@@ -106,7 +110,7 @@ public class Simulator {
             }
             transmitting = 0;
         }
-        System.out.println(packetsThrough);
+        System.out.println(packetsThrough +", " + soujournDelay/(double)packetsThrough + ", " + dropped);
     }
 
     public String print() {

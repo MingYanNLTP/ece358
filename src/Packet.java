@@ -10,5 +10,6 @@ public class Packet {
         this.size = 8000;
     }
     public void process(int i) {
+        timeInQ = i - generated;
     }
 }

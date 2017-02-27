@@ -6,7 +6,6 @@ import java.util.Random;
  * Created by ming on 2017-01-12.
  */
 public class One_Queue {
-    Server server;
     Queue<Packet> queue;
     int BEB;
     int waitBEB;
@@ -19,10 +18,9 @@ public class One_Queue {
     int transmittingUntil;
 
     public One_Queue() {
-        server = new Server();
         queue = new LinkedList<>();
         BEB = 0;
-        waitBEB = 5;
+        waitBEB = 0;//5;
         transmitting = false;
         backingOff = false;
         sensed = false;
@@ -59,21 +57,22 @@ public class One_Queue {
         backingOff = true;
     }
 
-    public void backOff(int tick) {
+    public int backOff(int tick) {
         transmitting = false;
         transmittingUntil = 0;
         sensed = false;
         BEB++;
         if (BEB > 10) {
-            System.out.println("drop it like its hot");
             queue.remove();
             BEB = 0;
+            return 1;
         } else {
             Random random = new Random();
             int wait = random.nextInt((int)Math.pow(2, BEB));
             backOffTick = tick + 512 * wait;
             backingOff = true;
         }
+        return 0;
     }
 
     public void stopBackOff() {
@@ -86,21 +85,16 @@ public class One_Queue {
         transmittingUntil = tick;
     }
 
-    public void transmitFinish() {
+    public int transmitFinish(int tick) {
         transmitting = false;
         sensed = false;
         transmittingUntil = 0;
         BEB = 0;
-        queue.remove();
+        Packet packet = queue.poll();
+        packet.process(tick);
+        return packet.timeInQ;
     }
 
-    public void processPacket() {
-        server.processPacket();
-    }
-
-    public void finishPacket() {
-        server.finishProcess();
-    }
 
     @Override
     public String toString() {
