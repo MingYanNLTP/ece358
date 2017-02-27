@@ -5,11 +5,10 @@ public class Packet {
     int generated;
     int size;
     int timeInQ;
-    public Packet(int tick, int size){
+    public Packet(int tick){
         generated = tick;
-        this.size = size;
+        this.size = 8000;
     }
     public void process(int i) {
-        timeInQ = i - generated;
     }
 }

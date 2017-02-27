@@ -8,11 +8,9 @@ public class Server {
     }
 
     public void processPacket() {
-        busy = 1;
     }
 
     public void finishProcess() {
-        busy = 0;
     }
 
     public int isBusy() {
